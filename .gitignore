@@ -1,0 +1,16 @@
+# Ignore cache and virtual environments
+__pycache__/
+venv/
+env/
+.venv/
+
+# Ignore heavy datasets and media
+dataset/
+images/
+*.mp4
+*.jpg
+*.png
+*.csv
+
+# Ignore OS system files
+.DS_Store
