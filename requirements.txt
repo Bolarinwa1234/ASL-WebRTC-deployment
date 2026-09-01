@@ -5,3 +5,4 @@ mediapipe
 tensorflow-cpu
 numpy
 gTTS
+av
