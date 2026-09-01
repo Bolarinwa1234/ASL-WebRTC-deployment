@@ -1,5 +1,5 @@
 import streamlit as st
-from streamlit_webrtc import webrtc_streamer, VideoTransformerBase, RTCConfiguration
+from streamlit_webrtc import webrtc_streamer, VideoProcessorBase, RTCConfiguration
 import cv2
 import numpy as np
 import mediapipe as mp
@@ -8,6 +8,7 @@ from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import LSTM, Dense, Dropout
 import json
 import time
+import av
 from collections import deque
 from gtts import gTTS
 import base64
@@ -43,7 +44,7 @@ def load_assets():
 classes, interpreter, lstm_model = load_assets()
 
 # ── WEBRTC PROCESSOR CLASS ─────────────────────────────────────────────
-class ASLProcessor(VideoTransformerBase):
+class ASLProcessor(VideoProcessorBase):
     def __init__(self):
         # MediaPipe initialization per-thread
         self.mp_hands = mp.solutions.hands
@@ -92,13 +93,13 @@ class ASLProcessor(VideoTransformerBase):
         diffs = np.linalg.norm(np.diff(positions, axis=0), axis=1)
         return float(np.max(diffs))
 
-    def transform(self, frame):
+    def recv(self, frame):
         img = frame.to_ndarray(format="bgr24")
         h, w = img.shape[:2]
         
         self.frame_counter += 1
         if self.frame_counter % 2 != 0:
-            return img # Frame dropping logic
+            return av.VideoFrame.from_ndarray(img, format="bgr24") # Frame dropping logic
 
         img_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
         result = self.hands.process(img_rgb)
@@ -252,23 +253,23 @@ class ASLProcessor(VideoTransformerBase):
         cv2.putText(img, f'Sentence: {self.sentence}', (23, 450),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 255, 0), 2, cv2.LINE_AA)
 
-        return img
+        return av.VideoFrame.from_ndarray(img, format="bgr24")
 
 # ── STREAMLIT FRONTEND ─────────────────────────────────────────────────
 RTC_CONFIG = RTCConfiguration({"iceServers": [{"urls": ["stun:stun.l.google.com:19302"]}]})
 
 ctx = webrtc_streamer(
     key="asl-translator",
-    video_transformer_factory=ASLProcessor,
+    video_processor_factory=ASLProcessor,
     rtc_configuration=RTC_CONFIG,
     media_stream_constraints={"video": True, "audio": False}
 )
 
 # Render TTS Audio dynamically when triggered by the WebRTC thread
-if ctx.video_transformer:
-    if ctx.video_transformer.trigger_tts_text:
-        text_to_speak = ctx.video_transformer.trigger_tts_text
-        ctx.video_transformer.trigger_tts_text = None  # Reset flag
+if ctx.video_processor:
+    if ctx.video_processor.trigger_tts_text:
+        text_to_speak = ctx.video_processor.trigger_tts_text
+        ctx.video_processor.trigger_tts_text = None  # Reset flag
         
         # Generate Audio
         tts = gTTS(text=text_to_speak, lang='en')
